@@ -3,8 +3,10 @@ import { Schema, model, Types } from "mongoose";
 export interface IBook {
   title: string;
   language: string;
+  level: string;
   coverImageUrl: string;
   contentKey: string;
+  pdfUrl?: string;
   priceIndividual: number;
   isPublished: boolean;
   uploadedBy: Types.ObjectId;
@@ -14,8 +16,10 @@ const bookSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
     language: { type: String, required: true, trim: true },
+    level: { type: String, required: true, trim: true, default: "Beginner" },
     coverImageUrl: { type: String, required: true },
     contentKey: { type: String, required: true },
+    pdfUrl: { type: String },
     priceIndividual: { type: Number, required: true, default: 5900 },
     isPublished: { type: Boolean, default: true },
     uploadedBy: { type: Types.ObjectId, ref: "User", required: true }
@@ -23,6 +27,6 @@ const bookSchema = new Schema(
   { timestamps: true }
 );
 
-bookSchema.index({ title: "text", language: "text" });
+bookSchema.index({ title: "text", language: "text" }, { language_override: "dummy_lang" });
 
 export const Book = model<IBook>("Book", bookSchema);

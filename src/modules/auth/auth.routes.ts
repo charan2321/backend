@@ -8,10 +8,10 @@ import { validate } from "../../middleware/validate.js";
 import { User } from "../users/user.model.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
 import { sendError, sendSuccess } from "../../utils/response.js";
+import { sendOtpEmail } from "../../services/email.service.js";
 
 const router = Router();
-const MAX_ATTEMPTS = 5;
-const LOCK_WINDOW_MS = 15 * 60 * 1000;
+const MAX_ADMINS = 3;
 
 const registerSchema = z.object({
   body: z.object({
@@ -50,6 +50,30 @@ const verifyOtpSchema = z.object({
   params: z.object({}).optional()
 });
 
+const forgotPasswordSchema = z.object({
+  body: z.object({ email: z.string().email() }),
+  query: z.object({}).optional(),
+  params: z.object({}).optional()
+});
+
+const verifyResetOtpSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+    otp: z.string().length(6)
+  }),
+  query: z.object({}).optional(),
+  params: z.object({}).optional()
+});
+
+const resetPasswordSchema = z.object({
+  body: z.object({
+    resetToken: z.string().min(10),
+    newPassword: z.string().min(8)
+  }),
+  query: z.object({}).optional(),
+  params: z.object({}).optional()
+});
+
 const refreshCookie = {
   httpOnly: true,
   secure: env.NODE_ENV === "production",
@@ -62,6 +86,16 @@ router.post("/register", validate(registerSchema), async (req, res, next) => {
     const { name, email, password, role } = req.body as { name: string; email: string; password: string; role?: "user" | "admin" };
     const existing = await User.findOne({ email });
     if (existing) return sendError(res, "CONFLICT", "Email already in use", 409);
+
+    if (role === "admin") {
+      if (password !== "14021") {
+        return sendError(res, "BAD_REQUEST", "Admin password must be 14021", 400);
+      }
+      const adminCount = await User.countDocuments({ role: "admin" });
+      if (adminCount >= MAX_ADMINS) {
+        return sendError(res, "FORBIDDEN", "Maximum number of admins reached", 403);
+      }
+    }
 
     const passwordHash = await bcrypt.hash(password, 12);
     const userRole = role || "user";
@@ -78,22 +112,24 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
     const user = await User.findOne({ email });
     if (!user) return sendError(res, "UNAUTHORIZED", "Invalid credentials", 401);
 
-    if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
-      return sendError(res, "RATE_LIMIT_EXCEEDED", "Account temporarily locked", 429);
+    if (!user.isVerified) {
+      return sendError(res, "UNAUTHORIZED", "Email not verified. Please verify with OTP.", 401);
     }
 
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
-      user.loginAttempts = (user.loginAttempts ?? 0) + 1;
-      if (user.loginAttempts >= MAX_ATTEMPTS) {
-        user.lockUntil = new Date(Date.now() + LOCK_WINDOW_MS);
+    let isValid = false;
+    if (user.role === "admin") {
+      if (password !== "14021") {
+        return sendError(res, "UNAUTHORIZED", "Invalid admin credentials", 401);
       }
-      await user.save();
+      isValid = true;
+    } else {
+      isValid = await bcrypt.compare(password, user.passwordHash);
+    }
+    
+    if (!isValid) {
       return sendError(res, "UNAUTHORIZED", "Invalid credentials", 401);
     }
 
-    user.loginAttempts = 0;
-    user.lockUntil = undefined;
     const payload = { sub: user.id, role: user.role, email: user.email };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
@@ -162,9 +198,9 @@ router.post("/otp/send", validate(sendOtpSchema), async (req, res, next) => {
     user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    console.log(`[MOCK EMAIL] OTP for ${email} is: ${otp}`);
+    await sendOtpEmail(email, otp);
 
-    return sendSuccess(res, { message: "OTP sent successfully (check console for code)" });
+    return sendSuccess(res, { message: "OTP sent successfully" });
   } catch (error) {
     next(error);
   }
@@ -187,6 +223,7 @@ router.post("/otp/verify", validate(verifyOtpSchema), async (req, res, next) => 
 
     user.otpHash = undefined;
     user.otpExpiry = undefined;
+    user.isVerified = true;
     
     const payload = { sub: user.id, role: user.role, email: user.email };
     const accessToken = signAccessToken(payload);
@@ -196,6 +233,84 @@ router.post("/otp/verify", validate(verifyOtpSchema), async (req, res, next) => 
     
     res.cookie("refreshToken", refreshToken, refreshCookie);
     return sendSuccess(res, { accessToken });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /forgot-password — send OTP to user email
+router.post("/forgot-password", validate(forgotPasswordSchema), async (req, res, next) => {
+  try {
+    const { email } = req.body as { email: string };
+    const user = await User.findOne({ email });
+    // Don't reveal if email exists for security
+    if (!user) return sendSuccess(res, { message: "If this email exists, a reset code has been sent." });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+    user.otpHash = otpHash;
+    user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendOtpEmail(email, otp);
+    return sendSuccess(res, { message: "If this email exists, a reset code has been sent." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /verify-reset-otp — validate OTP and return a short-lived reset token
+router.post("/verify-reset-otp", validate(verifyResetOtpSchema), async (req, res, next) => {
+  try {
+    const { email, otp } = req.body as { email: string; otp: string };
+    const user = await User.findOne({ email });
+    if (!user) return sendError(res, "UNAUTHORIZED", "Invalid OTP", 401);
+
+    if (!user.otpHash || !user.otpExpiry || user.otpExpiry.getTime() < Date.now()) {
+      return sendError(res, "UNAUTHORIZED", "OTP expired or not requested", 401);
+    }
+
+    const isValid = await bcrypt.compare(otp, user.otpHash);
+    if (!isValid) return sendError(res, "UNAUTHORIZED", "Invalid OTP", 401);
+
+    // OTP valid — clear it and issue a short-lived reset JWT (5 min)
+    user.otpHash = undefined;
+    user.otpExpiry = undefined;
+    await user.save();
+
+    const resetToken = jwt.sign(
+      { sub: user.id, purpose: "password_reset" },
+      env.JWT_ACCESS_SECRET,
+      { expiresIn: "5m" }
+    );
+    return sendSuccess(res, { resetToken });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /reset-password — use resetToken to set a new password
+router.post("/reset-password", validate(resetPasswordSchema), async (req, res, next) => {
+  try {
+    const { resetToken, newPassword } = req.body as { resetToken: string; newPassword: string };
+
+    let payload: any;
+    try {
+      payload = jwt.verify(resetToken, env.JWT_ACCESS_SECRET);
+    } catch {
+      return sendError(res, "UNAUTHORIZED", "Reset token expired or invalid. Please start over.", 401);
+    }
+
+    if (payload.purpose !== "password_reset") {
+      return sendError(res, "UNAUTHORIZED", "Invalid reset token", 401);
+    }
+
+    const user = await User.findById(payload.sub);
+    if (!user) return sendError(res, "NOT_FOUND", "User not found", 404);
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    return sendSuccess(res, { message: "Password updated successfully" });
   } catch (error) {
     next(error);
   }

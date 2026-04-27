@@ -51,4 +51,70 @@ router.get("/me/activity", requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /me/activity/ping — called every 5 min while user is reading
+router.post("/me/activity/ping", requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user?.id).select("dailyActivity");
+    if (!user) return sendSuccess(res, { pinged: false });
+
+    const todayStr = new Date().toDateString();
+    const existing = user.dailyActivity.find(
+      (a) => new Date(a.date).toDateString() === todayStr
+    );
+
+    if (existing) {
+      existing.pagesViewed += 1; // each ping = 5 min = ~1 page unit
+    } else {
+      user.dailyActivity.push({
+        date: new Date(),
+        bookId: req.body.bookId || undefined,
+        pagesViewed: 1
+      });
+    }
+
+    // Keep only last 90 days to save space
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    user.dailyActivity = user.dailyActivity.filter(
+      (a) => new Date(a.date) >= cutoff
+    ) as typeof user.dailyActivity;
+
+    await user.save();
+    return sendSuccess(res, { pinged: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /me/stats — returns streak, totalHoursRead, booksRead
+router.get("/me/stats", requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user?.id).select("dailyActivity purchasedBooks");
+    if (!user) return sendSuccess(res, { streak: 0, hoursRead: 0, booksRead: 0 });
+
+    const activity = user.dailyActivity;
+
+    // Each pagesViewed unit = 5 minutes; convert to hours
+    const totalMinutes = activity.reduce((sum, a) => sum + (a.pagesViewed * 5), 0);
+    const hoursRead = Math.round(totalMinutes / 60 * 10) / 10; // 1 decimal
+
+    // Streak: count consecutive days ending today
+    const activeDays = new Set(activity.map((a) => new Date(a.date).toDateString()));
+    let streak = 0;
+    const cursor = new Date();
+    while (activeDays.has(cursor.toDateString())) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return sendSuccess(res, {
+      streak,
+      hoursRead,
+      booksRead: user.purchasedBooks.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export { router as userRouter };

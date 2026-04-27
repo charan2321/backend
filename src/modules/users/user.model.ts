@@ -8,6 +8,7 @@ export interface IUser {
   email: string;
   passwordHash: string;
   role: UserRole;
+  isVerified: boolean;
   subscription: {
     plan: SubscriptionPlan;
     startDate?: Date;
@@ -28,8 +29,8 @@ export type UserDocument = HydratedDocument<IUser>;
 const activitySchema = new Schema(
   {
     date: { type: Date, required: true },
-    bookId: { type: Types.ObjectId, required: true, ref: "Book" },
-    pagesViewed: { type: Number, required: true, min: 1 }
+    bookId: { type: Types.ObjectId, ref: "Book" }, // optional
+    pagesViewed: { type: Number, default: 1, min: 1 }
   },
   { _id: false }
 );
@@ -40,6 +41,7 @@ const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
+    isVerified: { type: Boolean, default: false },
     subscription: {
       plan: { type: String, enum: ["none", "30day", "60day"], default: "none" },
       startDate: { type: Date },

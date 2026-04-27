@@ -31,7 +31,14 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "10kb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString();
+    }
+  })
+);
 app.use((req, _res, next) => {
   const sanitize = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(sanitize);
@@ -62,7 +69,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 60_000,
-  max: 10,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true
@@ -70,5 +77,6 @@ const authLimiter = rateLimit({
 
 app.use("/api", globalLimiter);
 app.use("/api/v1/auth", authLimiter);
+app.use("/uploads", express.static("uploads"));
 app.use("/api/v1", router);
 app.use(errorHandler);

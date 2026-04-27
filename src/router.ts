@@ -1,4 +1,5 @@
 import { Router } from "express";
+// Trigger restart for new env variables
 import { adminRouter } from "./modules/admin/admin.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { bookRouter } from "./modules/books/book.routes.js";
