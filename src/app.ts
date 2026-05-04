@@ -23,7 +23,7 @@ app.get("/ready", (_req, res) => {
   });
 });
 
-app.use(helmet());
+app.use((helmet as unknown as () => any)());
 const allowedOrigins = env.CORS_ORIGINS
   .split(",")
   .map((item) => item.trim())
@@ -71,14 +71,15 @@ app.use((req, _res, next) => {
 });
 if (env.NODE_ENV === "development") app.use(morgan("dev"));
 
-const globalLimiter = rateLimit({
+const rateLimitFactory = rateLimit as unknown as (options: Record<string, unknown>) => any;
+const globalLimiter = rateLimitFactory({
   windowMs: 60_000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false
 });
 
-const authLimiter = rateLimit({
+const authLimiter = rateLimitFactory({
   windowMs: 60_000,
   max: 100,
   standardHeaders: true,
