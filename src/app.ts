@@ -134,4 +134,6 @@ app.get("/", (_req, res) => {
   });
 });
 
+app.use("*", (req, res) => res.status(404).json({ success: false, error: { message: "Route not found", code: "NOT_FOUND" } }));
+
 app.use(errorHandler);
