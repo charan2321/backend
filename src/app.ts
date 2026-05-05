@@ -7,7 +7,8 @@ import morgan from "morgan";
 import mongoose from "mongoose";
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { router } from "./router.js";
+import { router } from "./router";
+import { app } from "./app";
 
 export const app = express();
 
