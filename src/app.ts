@@ -23,18 +23,19 @@ app.get("/ready", (_req, res) => {
   });
 });
 
-app.use((helmet as unknown as () => any)());
-app.use(cors({
+const corsOptions = {
   origin: [
     "https://frontend-gamma-hazel-1nw9r3172x.vercel.app",
-    "https://frontend-7ko9rb6i-charus-projects-f5d15d88.vercel.app"
+    "https://frontend-r7ko9rb6i-charus-projects-f5d15d88.vercel.app"
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true
-}));
+};
 
-// ✅ FIX PREFLIGHT (CRITICAL)
-app.get('(.*)', (req: Request, res: Response)
+app.use((helmet as unknown as () => any)());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // ✅ Handle preflight requests
+
 app.use(cookieParser());
 app.use(
   express.json({
@@ -63,6 +64,7 @@ app.use((req, _res, next) => {
   req.params = sanitize(req.params) as typeof req.params;
   next();
 });
+
 if (env.NODE_ENV === "development") app.use(morgan("dev"));
 
 const rateLimitFactory = rateLimit as unknown as (options: Record<string, unknown>) => any;
@@ -86,7 +88,6 @@ app.use("/api/auth", authLimiter);
 app.use("/uploads", express.static("uploads"));
 app.use("/api", router);
 
-// ── Root health check ──────────────────────────────────────────────────────
 app.get("/", (_req, res) => {
   res.json({
     status: "✅ LinguaStar API is running",
@@ -95,35 +96,35 @@ app.get("/", (_req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       auth: {
-        register:       "POST /api/v1/auth/register",
-        login:          "POST /api/v1/auth/login",
-        logout:         "POST /api/v1/auth/logout",
-        refresh:        "POST /api/v1/auth/refresh",
-        forgot_password:"POST /api/v1/auth/forgot-password",
-        verify_otp:     "POST /api/v1/auth/otp/verify",
-        send_otp:       "POST /api/v1/auth/otp/send",
-        reset_password: "POST /api/v1/auth/reset-password",
+        register:        "POST /api/v1/auth/register",
+        login:           "POST /api/v1/auth/login",
+        logout:          "POST /api/v1/auth/logout",
+        refresh:         "POST /api/v1/auth/refresh",
+        forgot_password: "POST /api/v1/auth/forgot-password",
+        verify_otp:      "POST /api/v1/auth/otp/verify",
+        send_otp:        "POST /api/v1/auth/otp/send",
+        reset_password:  "POST /api/v1/auth/reset-password",
       },
       users: {
-        me:             "GET  /api/v1/users/me",
-        update_me:      "PATCH /api/v1/users/me",
-        activity:       "GET  /api/v1/users/me/activity",
-        ping:           "POST /api/v1/users/me/activity/ping",
-        stats:          "GET  /api/v1/users/me/stats",
-        all_users:      "GET  /api/v1/users (admin only)",
+        me:         "GET  /api/v1/users/me",
+        update_me:  "PATCH /api/v1/users/me",
+        activity:   "GET  /api/v1/users/me/activity",
+        ping:       "POST /api/v1/users/me/activity/ping",
+        stats:      "GET  /api/v1/users/me/stats",
+        all_users:  "GET  /api/v1/users (admin only)",
       },
       books: {
-        list:           "GET  /api/v1/books",
-        get_one:        "GET  /api/v1/books/:id",
-        create:         "POST /api/v1/books (admin only)",
-        update:         "PUT  /api/v1/books/:id (admin only)",
-        delete:         "DELETE /api/v1/books/:id (admin only)",
-        read_pdf:       "GET  /api/v1/books/:id/read (auth required)",
+        list:     "GET  /api/v1/books",
+        get_one:  "GET  /api/v1/books/:id",
+        create:   "POST /api/v1/books (admin only)",
+        update:   "PUT  /api/v1/books/:id (admin only)",
+        delete:   "DELETE /api/v1/books/:id (admin only)",
+        read_pdf: "GET  /api/v1/books/:id/read (auth required)",
       },
       payments: {
-        create_order:   "POST /api/v1/payments/create-order",
-        verify:         "POST /api/v1/payments/verify",
-        history:        "GET  /api/v1/payments/history",
+        create_order: "POST /api/v1/payments/create-order",
+        verify:       "POST /api/v1/payments/verify",
+        history:      "GET  /api/v1/payments/history",
       },
     },
   });
