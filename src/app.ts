@@ -34,7 +34,7 @@ const corsOptions = {
 
 app.use((helmet as unknown as () => any)());
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // ✅ Handle preflight requests
+app.options("(.*)", cors(corsOptions));
 
 app.use(cookieParser());
 app.use(
@@ -106,12 +106,12 @@ app.get("/", (_req, res) => {
         reset_password:  "POST /api/v1/auth/reset-password",
       },
       users: {
-        me:         "GET  /api/v1/users/me",
-        update_me:  "PATCH /api/v1/users/me",
-        activity:   "GET  /api/v1/users/me/activity",
-        ping:       "POST /api/v1/users/me/activity/ping",
-        stats:      "GET  /api/v1/users/me/stats",
-        all_users:  "GET  /api/v1/users (admin only)",
+        me:        "GET  /api/v1/users/me",
+        update_me: "PATCH /api/v1/users/me",
+        activity:  "GET  /api/v1/users/me/activity",
+        ping:      "POST /api/v1/users/me/activity/ping",
+        stats:     "GET  /api/v1/users/me/stats",
+        all_users: "GET  /api/v1/users (admin only)",
       },
       books: {
         list:     "GET  /api/v1/books",
@@ -130,6 +130,6 @@ app.get("/", (_req, res) => {
   });
 });
 
-app.use((req, res) => res.status(404).json({ success: false, error: { message: "Route not found", code: "NOT_FOUND" } }));
+app.use((_req, res) => res.status(404).json({ success: false, error: { message: "Route not found", code: "NOT_FOUND" } }));
 
 app.use(errorHandler);
