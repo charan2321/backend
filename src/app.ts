@@ -24,10 +24,15 @@ app.get("/ready", (_req, res) => {
 });
 
 app.use((helmet as unknown as () => any)());
-const allowedOrigins = env.CORS_ORIGINS
-  .split(",")
-  .map((item) => item.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  "https://frontend-gamma-hazel-1nw9r3172x.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  ...(env.CORS_ORIGINS
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean))
+];
 
 app.use(
   cors({
@@ -88,9 +93,9 @@ const authLimiter = rateLimitFactory({
 });
 
 app.use("/api", globalLimiter);
-app.use("/api/v1/auth", authLimiter);
+app.use("/api/auth", authLimiter);
 app.use("/uploads", express.static("uploads"));
-app.use("/api/v1", router);
+app.use("/api", router);
 
 // ── Root health check ──────────────────────────────────────────────────────
 app.get("/", (_req, res) => {
