@@ -24,28 +24,17 @@ app.get("/ready", (_req, res) => {
 });
 
 app.use((helmet as unknown as () => any)());
-const allowedOrigins = [
-  "https://frontend-gamma-hazel-1nw9r3172x.vercel.app",
-  "http://localhost:3000",
-  "http://localhost:5173",
-  ...(env.CORS_ORIGINS
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean))
-];
+app.use(cors({
+  origin: [
+    "https://frontend-gamma-hazel-1nw9r3172x.vercel.app",
+    "https://frontend-7ko9rb6i-charus-projects-f5d15d88.vercel.app"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+}));
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error("CORS blocked by server"));
-    },
-    credentials: true
-  })
-);
+// ✅ FIX PREFLIGHT (CRITICAL)
+app.options("*", cors());
 app.use(cookieParser());
 app.use(
   express.json({
