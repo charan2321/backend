@@ -34,7 +34,7 @@ app.use(cors({
 }));
 
 // ✅ FIX PREFLIGHT (CRITICAL)
-app.get('(.*)', (req: Request, res: Response) =>{
+app.get('(.*)', (req: Request, res: Response)
 app.use(cookieParser());
 app.use(
   express.json({
